@@ -1,0 +1,159 @@
+# ═══════════════════════════════════════════════════════════
+# API Gateway Configuration
+# Port 8080 — the ONLY port clients ever need to know about
+# ═══════════════════════════════════════════════════════════
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway   # Name it registers with under in Eureka
+
+  # ═══════════════════════════════════════════════════════════
+  # SPRING CLOUD GATEWAY — Route Definitions
+  # ═══════════════════════════════════════════════════════════
+  # HOW ROUTING WORKS:
+  # 1. Request arrives at Gateway (port 8080)
+  # 2. Gateway checks routes in ORDER (top to bottom)
+  # 3. First matching route wins
+  # 4. Request is forwarded to the URI of that route
+  #
+  # PREDICATES: Conditions that must match (like if-statements for routing)
+  #   Path=/api/users/**  → matches any URL starting with /api/users/
+  #
+  # URI FORMAT:
+  #   lb://service-name  → "lb" = load balanced, looks up "service-name" in Eureka
+  #   http://localhost:X → hardcoded URL (avoid in production)
+  #
+  # The lb:// prefix triggers Spring Cloud LoadBalancer:
+  #   1. Asks Eureka: "Who is running as 'user-service'?"
+  #   2. Eureka returns: "instance at 192.168.1.5:8081"
+  #   3. Gateway forwards to that actual IP:port
+  #   4. If multiple instances → round-robin between them (free load balancing!)
+  # ═══════════════════════════════════════════════════════════
+  cloud:
+    gateway:
+      routes:
+
+        # ── USER SERVICE ──────────────────────────────────────
+        # Handles: registration, login, profile, JWT issuance
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/users/**
+          filters:
+            # Strip the first path segment? No — we keep /api/users/** as-is
+            # because User Service also expects paths starting with /api/users/**
+
+        # ── MOVIE SERVICE ─────────────────────────────────────
+        # Public browsing — no JWT needed (handled in JwtAuthenticationFilter whitelist)
+        - id: movie-service
+          uri: lb://movie-service
+          predicates:
+            - Path=/api/movies/**
+
+        # ── THEATRE SERVICE ───────────────────────────────────
+        - id: theatre-service
+          uri: lb://theatre-service
+          predicates:
+            - Path=/api/theatres/**
+
+        # ── SHOW SERVICE ──────────────────────────────────────
+        # Show search is public; show management (admin) is protected
+        - id: show-service
+          uri: lb://show-service
+          predicates:
+            - Path=/api/shows/**
+
+        # ── BOOKING SERVICE (THE CORE) ────────────────────────
+        # Always requires JWT — you must be logged in to book
+        - id: booking-service
+          uri: lb://booking-service
+          predicates:
+            - Path=/api/bookings/**
+
+        # ── PAYMENT SERVICE ───────────────────────────────────
+        # Requires JWT — payment must be tied to a user
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/payments/**
+
+        # ── NOTIFICATION SERVICE ──────────────────────────────
+        # Typically internal-only; exposed here for admin use
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**
+
+      # Global CORS configuration — allows browser clients to call the gateway
+      # In production: restrict origin to your actual frontend domain
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+
+      # Default filters applied to ALL routes
+      default-filters:
+        # Adds a unique request ID header for distributed tracing
+        - AddResponseHeader=X-Gateway, MovieBookingGateway
+
+# ═══════════════════════════════════════════════════════════
+# EUREKA CLIENT — Register gateway + discover services
+# ═══════════════════════════════════════════════════════════
+eureka:
+  client:
+    service-url:
+      # Must match the URL + credentials from discovery-server/application.yml
+      defaultZone: http://eureka:eureka-password@localhost:8761/eureka/
+    # Fetch registry every 5s in dev (default is 30s) for faster service discovery
+    registry-fetch-interval-seconds: 5
+  instance:
+    # Use IP address instead of hostname for registration.
+    # Prevents hostname resolution issues on Windows/Docker.
+    prefer-ip-address: true
+    # How often this instance sends a heartbeat to Eureka (default: 30s)
+    lease-renewal-interval-in-seconds: 10
+    # If Eureka doesn't hear from us in 30s, evict us (default: 90s, reduced for dev)
+    lease-expiration-duration-in-seconds: 30
+
+# ═══════════════════════════════════════════════════════════
+# JWT Configuration
+# ═══════════════════════════════════════════════════════════
+# ⚠️  This secret MUST match exactly what's in user-service/application.yml
+#     Both services use this to sign/verify the same tokens.
+#     In production: use environment variable JWT_SECRET (never hardcode in Git)
+jwt:
+  secret: "myMovieBookingSystemSecretKey2024@SuperSecureHmac256BitsLong!!"
+
+# ═══════════════════════════════════════════════════════════
+# ACTUATOR — Health, Info endpoints
+# ═══════════════════════════════════════════════════════════
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true   # Exposes /actuator/gateway/routes — lists all registered routes
+
+# ═══════════════════════════════════════════════════════════
+# LOGGING
+# ═══════════════════════════════════════════════════════════
+logging:
+  level:
+    com.moviebooking: DEBUG
+    org.springframework.cloud.gateway: INFO
+    # Enable this to see every route match decision (very verbose, dev only):
+    # org.springframework.cloud.gateway.route.RouteDefinitionRouteLocator: DEBUG

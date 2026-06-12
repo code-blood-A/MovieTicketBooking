@@ -1,0 +1,123 @@
+# ═══════════════════════════════════════════════════════════
+# User Service Configuration
+# ═══════════════════════════════════════════════════════════
+
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service   # This name is used by Eureka + other services calling lb://user-service
+
+  # ═══════════════════════════════════════════════════════════
+  # JAVA 21 VIRTUAL THREADS
+  # ═══════════════════════════════════════════════════════════
+  # One line to enable Project Loom virtual threads for Tomcat.
+  # Every incoming request gets a virtual thread (not a platform thread).
+  # BCrypt + DB queries are blocking → virtual threads handle this efficiently.
+  threads:
+    virtual:
+      enabled: true
+
+  # ═══════════════════════════════════════════════════════════
+  # DATASOURCE — MySQL Connection
+  # ═══════════════════════════════════════════════════════════
+  # BEFORE RUNNING: Create this database in MySQL:
+  #   CREATE DATABASE user_db;
+  #   CREATE USER 'movieapp'@'localhost' IDENTIFIED BY 'movieapp123';
+  #   GRANT ALL PRIVILEGES ON user_db.* TO 'movieapp'@'localhost';
+  #   FLUSH PRIVILEGES;
+  #
+  # WHY a dedicated DB user (movieapp) instead of root?
+  # Security principle of least privilege — this user can ONLY access user_db.
+  # If credentials are compromised, attacker can't touch other databases.
+  datasource:
+    url: jdbc:mysql://localhost:3306/user_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root        # Change to your MySQL username
+    password: root        # Change to your MySQL password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+    # HikariCP — the default (and best) JDBC connection pool in Spring Boot.
+    # Connection pools reuse DB connections instead of creating a new one per request.
+    # Creating a new TCP connection to MySQL takes ~50-100ms — expensive per request.
+    # With pooling: connections are reused → near-zero overhead.
+    hikari:
+      pool-name: UserServiceHikariPool
+      maximum-pool-size: 10      # Max 10 simultaneous DB connections
+      minimum-idle: 3            # Always keep 3 connections warm
+      connection-timeout: 20000  # Fail if no connection available in 20s
+      idle-timeout: 300000       # Close idle connections after 5 min
+      max-lifetime: 1200000      # Recycle connections every 20 min (prevents stale connections)
+
+  # ═══════════════════════════════════════════════════════════
+  # JPA / HIBERNATE
+  # ═══════════════════════════════════════════════════════════
+  jpa:
+    hibernate:
+      # ddl-auto options:
+      #   create        → drops and recreates all tables on every startup (DEV only, DESTROYS DATA)
+      #   create-drop   → creates on startup, drops on shutdown (tests)
+      #   update        → adds/modifies columns to match entities (SAFE for dev, risky for prod)
+      #   validate      → verifies DB matches entities, fails if not (PROD — no auto changes)
+      #   none          → hands-off, you manage schema manually (PROD preferred with Flyway/Liquibase)
+      #
+      # For Phase 1 dev: 'update' lets Hibernate create the 'users' table automatically.
+      # In Phase 5 (production readiness): switch to 'validate' + use Flyway migrations.
+      ddl-auto: update
+    show-sql: true       # Logs every SQL query (useful for learning, disable in prod)
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true  # Pretty-prints the SQL in logs (easier to read)
+    open-in-view: false
+    # WHY open-in-view: false?
+    # By default, Spring Boot keeps the Hibernate session open during the entire
+    # HTTP request (Open Session in View pattern). This allows lazy loading in
+    # the view layer BUT can cause N+1 query problems silently.
+    # Disabling it forces you to load all data explicitly in the service layer
+    # → better performance, explicit data fetching, no hidden queries.
+
+# ═══════════════════════════════════════════════════════════
+# EUREKA CLIENT
+# ═══════════════════════════════════════════════════════════
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka:eureka-password@localhost:8761/eureka/
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+# ═══════════════════════════════════════════════════════════
+# JWT CONFIGURATION
+# ═══════════════════════════════════════════════════════════
+# ⚠️  SECRET MUST MATCH api-gateway/application.yml jwt.secret exactly.
+#     If they differ, the Gateway will reject ALL tokens issued by this service.
+#     In production: inject via environment variable JWT_SECRET.
+jwt:
+  secret: "myMovieBookingSystemSecretKey2024@SuperSecureHmac256BitsLong!!"
+  expiration-ms: 86400000   # 24 hours in milliseconds (1 day)
+
+# ═══════════════════════════════════════════════════════════
+# ACTUATOR
+# ═══════════════════════════════════════════════════════════
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+
+# ═══════════════════════════════════════════════════════════
+# LOGGING
+# ═══════════════════════════════════════════════════════════
+logging:
+  level:
+    com.moviebooking: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG                    # Shows the actual SQL queries
+    org.hibernate.type.descriptor.sql: TRACE   # Shows bind parameters in SQL

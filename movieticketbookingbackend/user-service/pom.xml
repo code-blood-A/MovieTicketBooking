@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.moviebooking</groupId>
+        <artifactId>movieticketbookingbackend</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>user-service</artifactId>
+    <name>User Service</name>
+    <description>
+        Handles user registration, login, JWT token issuance, and profile management.
+        Owns the 'user_db' database exclusively.
+
+        ⚠️  IMPORTANT: Unlike API Gateway (WebFlux), this is a regular Spring MVC service.
+        It uses spring-boot-starter-web (Tomcat), NOT spring-cloud-starter-gateway.
+        Each microservice in this system runs on standard Spring MVC — only the Gateway is reactive.
+    </description>
+
+    <dependencies>
+
+        <!--
+        Standard Spring MVC — REST controllers, Tomcat embedded server.
+        This is what makes @RestController and @RequestMapping work.
+        DO NOT add spring-cloud-starter-gateway here — that's only for the gateway.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--
+        Spring Data JPA + Hibernate:
+        - Turns UserRepository interface into a full DAO automatically
+        - @Entity classes are mapped to MySQL tables
+        - Eliminates boilerplate SQL for standard CRUD operations
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!--
+        Spring Security:
+        WHY here if Gateway handles JWT validation?
+        Two reasons:
+          1. BCryptPasswordEncoder lives in Spring Security — we need it to hash passwords
+          2. In case someone bypasses the Gateway and hits user-service directly,
+             we have a fallback security layer (all requests permitted, but session is stateless)
+        We configure it to permit all requests because the Gateway is our real gatekeeper.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!--
+        Bean Validation (JSR-380):
+        Powers @NotBlank, @Email, @Size on DTOs.
+        @Valid on controller method parameters triggers validation automatically.
+        Invalid input → MethodArgumentNotValidException → handled by GlobalExceptionHandler.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- MySQL JDBC driver — connects to the user_db database -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!--
+        JWT (JJWT): User Service ISSUES tokens.
+        The Gateway validates them using the same secret key.
+        Both services must use identical secret + algorithm.
+        -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!--
+        Eureka Client: Registers user-service with the Discovery Server.
+        After registration, the Gateway can route /api/users/** → lb://user-service.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
+        <!-- Actuator: /actuator/health for Docker health checks and monitoring -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

@@ -1,0 +1,71 @@
+# ═══════════════════════════════════════════════════════════
+# .gitignore for Movie Ticket Booking System (Maven Multi-Module)
+# ═══════════════════════════════════════════════════════════
+
+# ── Maven build output ───────────────────────────────────────
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# ── Maven wrapper (if used) ──────────────────────────────────
+.mvn/wrapper/maven-wrapper.properties
+
+# ── IDE — IntelliJ IDEA ──────────────────────────────────────
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+.idea_modules/
+
+# ── IDE — VS Code ────────────────────────────────────────────
+.vscode/
+*.code-workspace
+
+# ── IDE — Eclipse ────────────────────────────────────────────
+.classpath
+.project
+.settings/
+bin/
+
+# ── OS files ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Java compiled files ──────────────────────────────────────
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+logs/
+log/
+
+# ── Spring Boot ──────────────────────────────────────────────
+spring-shell.log
+
+# ── Docker ───────────────────────────────────────────────────
+# (Allow Dockerfiles to be committed, ignore generated artifacts)
+docker-compose.override.yml
+
+# ── Environment / Secrets ─────────────────────────────────────
+# ⚠️  IMPORTANT: In a real project, application.yml should NOT contain
+# hardcoded secrets (DB passwords, JWT secrets). Instead:
+# - Use environment variables
+# - Use Spring Cloud Config Server
+# - Use .env files (and .gitignore them)
+# For this LEARNING project, credentials are hardcoded for simplicity.
+# NEVER do this in a production/public project.
+.env
+*.env
+secrets/
+
+# ── Temporary files ───────────────────────────────────────────
+*.tmp
+*.swp
+*.bak

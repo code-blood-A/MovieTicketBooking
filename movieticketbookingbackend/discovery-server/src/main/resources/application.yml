@@ -1,0 +1,82 @@
+# ═══════════════════════════════════════════════════════════
+# Discovery Server Configuration
+# Port 8761 is the universal Eureka convention — don't change it
+# without updating all client configurations too.
+# ═══════════════════════════════════════════════════════════
+
+server:
+  port: 8761
+
+spring:
+  application:
+    # This name is what appears in Eureka dashboard and logs.
+    # Every service MUST have a unique spring.application.name.
+    name: discovery-server
+
+  security:
+    user:
+      # Credentials that all microservices use to register with Eureka.
+      # In production: use environment variables or Spring Cloud Config.
+      # NEVER hardcode credentials in a real project.
+      name: eureka
+      password: eureka-password
+
+eureka:
+  instance:
+    hostname: localhost
+
+  client:
+    # ═══════════════════════════════════════════════════════════
+    # CRITICAL: These two settings prevent the server from
+    # trying to register ITSELF as a client.
+    #
+    # Without these, Eureka would start → try to register with
+    # itself → fail (it's not ready yet) → log errors in a loop.
+    # This is the "self-registration" problem unique to the server.
+    # ═══════════════════════════════════════════════════════════
+    register-with-eureka: false
+    fetch-registry: false
+
+    service-url:
+      # The URL uses credentials in the format: http://user:pass@host:port/eureka/
+      # This is also the URL that ALL other services will point to.
+      defaultZone: http://${spring.security.user.name}:${spring.security.user.password}@localhost:${server.port}/eureka/
+
+  server:
+    # Without this, Eureka waits 5 minutes on startup before serving traffic,
+    # expecting other peers to sync. In a single-node dev setup, this just
+    # means a 5-minute delay before other services can discover each other.
+    # Setting to 0 disables this wait.
+    wait-time-in-ms-when-sync-empty: 0
+
+    # Eureka uses a "self-preservation" mode: if it suddenly stops hearing
+    # from many services, it assumes the NETWORK is down (not the services),
+    # and STOPS evicting them. This prevents mass eviction during network blips.
+    # For local development, we disable this so unreachable services are
+    # evicted quickly — faster feedback during development.
+    enable-self-preservation: false
+
+    # How often Eureka re-reads its registry and evicts unresponsive services.
+    # Default is 60000ms (60s). We reduce it in dev for faster feedback.
+    eviction-interval-timer-in-ms: 10000
+
+# ═══════════════════════════════════════════════════════════
+# Actuator — Health and Info endpoints
+# WHY: Docker Compose health checks, Kubernetes liveness probes,
+# and monitoring tools (Prometheus) all rely on these endpoints.
+# ═══════════════════════════════════════════════════════════
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+
+# Logging — show important Eureka events during development
+logging:
+  level:
+    com.netflix.eureka: WARN
+    com.netflix.discovery: WARN
+    com.moviebooking: DEBUG

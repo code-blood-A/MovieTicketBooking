@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.moviebooking</groupId>
+        <artifactId>movieticketbookingbackend</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>api-gateway</artifactId>
+    <name>API Gateway</name>
+    <description>
+        Single entry point for all clients. Validates JWT, routes to microservices,
+        enforces rate limiting (Phase 5). Built on Spring Cloud Gateway (Reactive / WebFlux).
+
+        ⚠️  CRITICAL ARCHITECTURE NOTE:
+        Spring Cloud Gateway is built on Spring WebFlux (reactive stack), NOT Spring MVC.
+        This means:
+          - No HttpServletRequest/HttpServletResponse (that's MVC/Servlet)
+          - Instead: ServerHttpRequest / ServerHttpResponse (reactive)
+          - Filters return Mono&lt;Void&gt; not void
+          - DO NOT add spring-boot-starter-web here — it conflicts with WebFlux.
+    </description>
+
+    <dependencies>
+
+        <!--
+        WHAT: The reactive API gateway engine.
+        WHY reactive (WebFlux)?
+          In a gateway, EVERY external request passes through here.
+          A non-reactive gateway with 500 concurrent requests would need 500 threads
+          (1 thread per request, blocking while waiting for downstream services).
+          With WebFlux, a small thread pool handles thousands of concurrent requests
+          using event loops — same pattern as Node.js / Nginx.
+          This is the right choice for a gateway that is purely I/O bound.
+
+        ⚠️  Do NOT add spring-boot-starter-web alongside this — they conflict.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId>
+        </dependency>
+
+        <!--
+        Eureka Client: Registers the gateway with Eureka AND allows it to
+        look up other services by name (lb://user-service resolves via this).
+        WHY: The gateway needs to know where user-service, booking-service, etc.
+        are running. Instead of hardcoding IPs, it asks Eureka by service name.
+        The 'lb://' prefix in route URIs triggers this lookup + load balancing.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
+        <!--
+        Spring Cloud LoadBalancer: Needed alongside Eureka client to actually
+        perform client-side load balancing when resolving lb:// URIs.
+        Without this, lb:// routes won't work even if Eureka is configured.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
+        <!--
+        JWT library (JJWT): The Gateway validates JWT tokens from clients.
+        WHY HERE and not just in User Service?
+          Every request hits the gateway first. Validating JWT here means:
+          1. Rejected invalid tokens BEFORE they reach any service (saves network hops)
+          2. Only ONE place does auth — services trust the gateway's X-User-Id header
+          3. Services don't need JWT logic themselves (single responsibility)
+
+        The secret key here MUST match the one in User Service (which ISSUES tokens).
+        -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Health endpoints for monitoring and Docker health checks -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+        Reactor Netty: The embedded server for WebFlux (replaces Tomcat).
+        Included transitively via spring-cloud-starter-gateway, listed here
+        explicitly for clarity. Netty is event-loop based — ideal for a gateway.
+        -->
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

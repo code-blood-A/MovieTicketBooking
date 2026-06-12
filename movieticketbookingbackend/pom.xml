@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+    =========================================================
+    PARENT POM — The single source of truth for all versions.
+    =========================================================
+    WHY a Parent POM?
+    - In a multi-module Maven project, every child service (user-service,
+      movie-service, etc.) would need to declare its own dependency versions.
+    - If Spring Boot version changes, you'd update 9 pom.xml files.
+    - With a Parent POM, you update ONE place and all children inherit it.
+    - This is the DRY (Don't Repeat Yourself) principle applied to build files.
+
+    HOW it works:
+    - packaging=pom means this module produces no JAR itself.
+    - <modules> lists every child service.
+    - <dependencyManagement> declares versions but does NOT add dependencies.
+      Children opt-in by declaring the dependency WITHOUT a version tag.
+    - <dependencies> (outside dependencyManagement) ARE added to every child.
+    =========================================================
+    -->
+
+    <groupId>com.moviebooking</groupId>
+    <artifactId>movieticketbookingbackend</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <name>Movie Ticket Booking System — Parent</name>
+    <description>
+        Microservices-based Movie Ticket Booking System (BookMyShow clone).
+        Learning project covering Microservices, LLD, HLD, Kafka, Redis, Docker.
+    </description>
+
+    <!-- ===== ALL CHILD MODULES ===== -->
+    <modules>
+        <module>discovery-server</module>
+        <module>api-gateway</module>
+        <module>user-service</module>
+        <module>movie-service</module>
+        <module>theatre-service</module>
+        <module>show-service</module>
+        <module>booking-service</module>
+        <module>payment-service</module>
+        <module>notification-service</module>
+    </modules>
+
+    <!-- ===== VERSION PROPERTIES ===== -->
+    <!--
+    WHY define versions as properties?
+    - Single place to bump a version across all usages.
+    - E.g., upgrading Spring Boot: change ONE line here, done.
+    -->
+    <properties>
+        <!-- Java 21 LTS — Virtual Threads (Project Loom) for high concurrency -->
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Core framework versions -->
+        <spring-boot.version>3.3.0</spring-boot.version>
+        <!--
+        Spring Cloud 2023.0.x (codename "Leyton") is compatible with Spring Boot 3.3.x
+        ALWAYS check https://spring.io/projects/spring-cloud for the compatibility matrix
+        before upgrading either one independently — they MUST align.
+        -->
+        <spring-cloud.version>2023.0.1</spring-cloud.version>
+
+        <!-- JWT library for token generation/validation -->
+        <jjwt.version>0.12.5</jjwt.version>
+
+        <!-- MapStruct: compile-time DTO ↔ Entity mapper (no reflection overhead) -->
+        <mapstruct.version>1.5.5.Final</mapstruct.version>
+    </properties>
+
+    <!--
+    =========================================================
+    DEPENDENCY MANAGEMENT — Version declarations only.
+    Children inherit versions but NOT the dependency itself.
+    =========================================================
+    -->
+    <dependencyManagement>
+        <dependencies>
+
+            <!--
+            Spring Boot BOM (Bill of Materials):
+            Imports hundreds of pre-aligned dependency versions.
+            This is why you can add spring-boot-starter-web without a version —
+            the BOM already pinned it.
+            -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!--
+            Spring Cloud BOM:
+            Pins versions for Eureka, Gateway, OpenFeign, Config Server, etc.
+            Without this, Eureka client and Gateway could pull incompatible versions.
+            -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- JWT: io.jsonwebtoken (JJWT) — used in User Service and API Gateway -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+
+            <!-- MapStruct -->
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct</artifactId>
+                <version>${mapstruct.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct-processor</artifactId>
+                <version>${mapstruct.version}</version>
+            </dependency>
+
+        </dependencies>
+    </dependencyManagement>
+
+    <!--
+    =========================================================
+    GLOBAL DEPENDENCIES — Added to EVERY child module.
+    Only add things that are genuinely universal.
+    =========================================================
+    -->
+    <dependencies>
+
+        <!--
+        Lombok: Eliminates boilerplate — @Getter, @Setter, @Builder,
+        @AllArgsConstructor, @NoArgsConstructor, @Slf4j etc.
+        optional=true means Lombok is NOT transitively passed to
+        modules that depend on this one. It's a compile-only tool.
+        -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Spring Boot Test: JUnit 5, Mockito, AssertJ — every service needs tests -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!--
+    =========================================================
+    BUILD PLUGIN MANAGEMENT
+    =========================================================
+    -->
+    <build>
+        <pluginManagement>
+            <plugins>
+
+                <!--
+                Spring Boot Maven Plugin:
+                - Repackages the JAR into a "fat JAR" (includes all dependencies).
+                - This is what makes `java -jar user-service.jar` work standalone.
+                - We exclude Lombok since it's only needed at compile time.
+                -->
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                    <configuration>
+                        <excludes>
+                            <exclude>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                            </exclude>
+                        </excludes>
+                    </configuration>
+                </plugin>
+
+                <!--
+                Maven Compiler Plugin:
+                - Targets Java 21 explicitly.
+                - annotationProcessorPaths is CRITICAL when using both Lombok and MapStruct:
+                  Lombok must run BEFORE MapStruct in the annotation processing order,
+                  otherwise MapStruct can't see Lombok-generated getters/setters.
+                -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.13.0</version>
+                    <configuration>
+                        <source>21</source>
+                        <target>21</target>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.mapstruct</groupId>
+                                <artifactId>mapstruct-processor</artifactId>
+                                <version>${mapstruct.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+
+            </plugins>
+        </pluginManagement>
+    </build>
+
+</project>

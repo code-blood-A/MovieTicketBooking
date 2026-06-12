@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+    PARENT reference — inherits ALL version management from the parent POM.
+    Notice: no versions anywhere in this file except where overriding.
+    -->
+    <parent>
+        <groupId>com.moviebooking</groupId>
+        <artifactId>movieticketbookingbackend</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>discovery-server</artifactId>
+    <name>Discovery Server (Eureka)</name>
+    <description>
+        Eureka Service Registry. All microservices register themselves here on startup.
+        Enables client-side load balancing and service discovery by name instead of hardcoded URLs.
+    </description>
+
+    <dependencies>
+
+        <!--
+        WHAT: Turns this Spring Boot app into a full Eureka Server.
+        WHY:  Without a service registry, every service needs to know the
+              exact IP:port of every other service. In a dynamic cloud environment
+              where services scale up/down and IPs change, hardcoding is impossible.
+              Eureka solves this: services register by NAME, and callers look up
+              the current IP/port by name at call time.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+        </dependency>
+
+        <!--
+        Spring Security: Protects the Eureka dashboard and registry endpoints.
+        WHY secure Eureka? Without auth, any service (or attacker) could register
+        a fake "payment-service" and intercept traffic. Basic auth is minimal
+        but sufficient for a learning/dev environment.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!--
+        Actuator: Exposes /actuator/health and /actuator/info endpoints.
+        WHY: Docker and Kubernetes use health endpoints to determine if a
+        container is alive and ready to serve traffic. A must-have from day 1.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+            Spring Boot Maven Plugin: Creates the runnable fat JAR.
+            Inherited from parent's pluginManagement — no version needed here.
+            -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
