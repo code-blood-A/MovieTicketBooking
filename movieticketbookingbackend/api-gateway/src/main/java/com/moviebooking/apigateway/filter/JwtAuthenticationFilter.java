@@ -106,6 +106,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      */
     private static final List<String> READ_ONLY_PUBLIC = List.of(
             "/api/movies",
+            "/api/theatres",
             "/api/shows"
     );
 

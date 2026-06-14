@@ -1,0 +1,334 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6",
+		"name": "Movie Booking - Theatre Service",
+		"description": "API collection for testing Theatre and Screen operations, including auto seat-generation, via the API Gateway (port 8080).",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. User / Auth",
+			"item": [
+				{
+					"name": "Login Admin User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.accessToken) {",
+									"    pm.environment.set(\"admin_token\", jsonData.accessToken);",
+									"    console.log(\"Saved admin_token to environment variables.\");",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"jarvis@gmail.com\",\n  \"password\": \"Test@1234\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"login"
+							]
+						},
+						"description": "Log in with the Admin user credentials. If you have a test environment set up with `baseUrl`, this script will automatically save the `accessToken` into a variable named `admin_token`."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Theatre Endpoints",
+			"item": [
+				{
+					"name": "Create Theatre (Admin Only)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"PVR Inorbit Mall\",\n  \"city\": \"Hyderabad\",\n  \"address\": \"Inorbit Mall, Madhapur\",\n  \"pincode\": \"500081\",\n  \"phone\": \"+91-9876543210\",\n  \"email\": \"inorbit@pvr.com\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/theatres",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"theatres"
+							]
+						},
+						"description": "Creates a new theatre. Requires ADMIN role (bearer JWT token in headers)."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Theatres (Public)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/theatres",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"theatres"
+							]
+						},
+						"description": "Fetch all theatres registered in the database."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Theatres by City (Public)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/theatres?city=Hyderabad",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"theatres"
+							],
+							"query": [
+								{
+									"key": "city",
+									"value": "Hyderabad"
+								}
+							]
+						},
+						"description": "Filter theatres by city query parameter."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Theatre by ID (Public)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/theatres/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"theatres",
+								"1"
+							]
+						},
+						"description": "Fetch details of a single theatre by its ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Theatre (Admin Only)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"PVR Inorbit Mall - Updated\",\n  \"city\": \"Hyderabad\",\n  \"address\": \"Inorbit Mall, Madhapur, Hyderabad\",\n  \"pincode\": \"500081\",\n  \"phone\": \"+91-9876543211\",\n  \"email\": \"inorbit_updated@pvr.com\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/theatres/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"theatres",
+								"1"
+							]
+						},
+						"description": "Updates details of a theatre by its ID. Requires ADMIN role."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Theatre (Admin Only)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/theatres/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"theatres",
+								"1"
+							]
+						},
+						"description": "Deletes a theatre by ID. Warning: Cascades to screens and seats. Requires ADMIN role."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. Screen Endpoints",
+			"item": [
+				{
+					"name": "Add Screen to Theatre (Admin Only - Auto-generates seats)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Screen 1\",\n  \"screenType\": \"IMAX\",\n  \"totalRows\": 10,\n  \"seatsPerRow\": 15,\n  \"premiumRows\": [\"H\", \"I\"],\n  \"reclinerRows\": [\"J\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/theatres/1/screens",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"theatres",
+								"1",
+								"screens"
+							]
+						},
+						"description": "Adds a screen to the specified theatre. Auto-generates the complete seat map based on totalRows and seatsPerRow. Flags rows H & I as PREMIUM and row J as RECLINER, with the rest default to REGULAR. Requires ADMIN role."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Screens for Theatre (Public)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/theatres/1/screens",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"theatres",
+								"1",
+								"screens"
+							]
+						},
+						"description": "Fetch screen summaries (without individual seats list) for a specific theatre."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Screen Detail with Seat Map (Public)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/theatres/screens/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"theatres",
+								"screens",
+								"1"
+							]
+						},
+						"description": "Fetch screen details including full layout of seats. Useful for rendering UI layouts."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "admin_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

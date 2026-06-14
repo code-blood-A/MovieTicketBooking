@@ -1,0 +1,58 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: theatre-service
+
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/theatre_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root        # Change to your MySQL username
+    password: root        # Change to your MySQL password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: TheatreServiceHikariPool
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+        # Batch inserts — CRITICAL for seat generation performance
+        # When we generate 150 seats and call saveAll(), Hibernate batches
+        # them into groups of 50 instead of 150 individual INSERT statements.
+        # Result: 3 round trips to DB instead of 150. Huge performance gain.
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+    open-in-view: false
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka:eureka-password@localhost:8761/eureka/
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+
+logging:
+  level:
+    com.moviebooking: DEBUG
+    org.hibernate.SQL: DEBUG
