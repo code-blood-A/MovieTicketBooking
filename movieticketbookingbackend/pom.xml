@@ -220,6 +220,20 @@
                     <configuration>
                         <source>21</source>
                         <target>21</target>
+                        <!--
+                        CRITICAL for Spring Boot 3.2+ (Spring Framework 6.1+):
+                        The -parameters flag tells javac to store method parameter names
+                        in the compiled .class files. Without this:
+                        - @RequestParam without name= → IllegalArgumentException
+                        - @PathVariable without name= → IllegalArgumentException
+                        - Spring Data @Query named params without @Param → fails
+                        Spring Boot's own spring-boot-starter-parent sets this flag.
+                        Since we use spring-boot-dependencies BOM (not the parent),
+                        we must set it explicitly here.
+                        -->
+                        <compilerArgs>
+                            <arg>-parameters</arg>
+                        </compilerArgs>
                         <annotationProcessorPaths>
                             <path>
                                 <groupId>org.projectlombok</groupId>

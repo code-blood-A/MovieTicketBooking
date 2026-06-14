@@ -87,14 +87,26 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      * /eureka/**           → Eureka dashboard (protected by its own Basic Auth)
      * /actuator/health     → Health checks (for Docker/monitoring)
      */
-    private static final List<String> PUBLIC_PATHS = List.of(
+    /** Paths that are always public regardless of HTTP method */
+    private static final List<String> ALWAYS_PUBLIC = List.of(
             "/api/users/register",
             "/api/users/login",
             "/api/users/refresh",
-            "/api/movies",
-            "/api/shows",
             "/eureka",
             "/actuator"
+    );
+
+    /**
+     * Paths that are public ONLY for read operations (GET, HEAD).
+     * POST/PUT/DELETE on these paths require a valid JWT.
+     * e.g.:  GET  /api/movies      → public (browse without login)
+     *        POST /api/movies      → requires JWT (admin creates movie)
+     *        GET  /api/shows       → public (search shows)
+     *        POST /api/shows/{id}/book → requires JWT
+     */
+    private static final List<String> READ_ONLY_PUBLIC = List.of(
+            "/api/movies",
+            "/api/shows"
     );
 
     /**
@@ -122,7 +134,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         log.debug("Gateway filter — path: {}", path);
 
         // STEP 1: Check if route is public — bypass JWT validation
-        if (isPublicPath(path)) {
+        if (isPublicPath(request)) {
             log.debug("Public path, skipping JWT validation: {}", path);
             return chain.filter(exchange);
         }
@@ -180,8 +192,28 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      * We use startsWith (not equals) to handle:
      * /api/movies → matches /api/movies, /api/movies/1, /api/movies?city=Mumbai
      */
-    private boolean isPublicPath(String path) {
-        return PUBLIC_PATHS.stream().anyMatch(path::startsWith);
+    /**
+     * Determines if a request should bypass JWT validation.
+     *
+     * @param request the incoming request (provides both path and HTTP method)
+     * @return true if JWT validation should be skipped
+     */
+    private boolean isPublicPath(ServerHttpRequest request) {
+        String path = request.getURI().getPath();
+        org.springframework.http.HttpMethod method = request.getMethod();
+
+        // Always public — any HTTP method
+        if (ALWAYS_PUBLIC.stream().anyMatch(path::startsWith)) {
+            return true;
+        }
+
+        // Read-only public — only GET and HEAD are public
+        if (READ_ONLY_PUBLIC.stream().anyMatch(path::startsWith)) {
+            return org.springframework.http.HttpMethod.GET.equals(method)
+                    || org.springframework.http.HttpMethod.HEAD.equals(method);
+        }
+
+        return false;
     }
 
     /**
