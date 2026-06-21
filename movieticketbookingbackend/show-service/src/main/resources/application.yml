@@ -1,0 +1,91 @@
+# ═══════════════════════════════════════════════════════════
+# Show Service Configuration
+# Port: 8084 | Database: show_db
+# ═══════════════════════════════════════════════════════════
+
+server:
+  port: 8084
+
+spring:
+  application:
+    name: show-service   # Must match the Eureka service name the Gateway routes to
+
+  # Java 21 Virtual Threads (Project Loom)
+  # Virtual threads are lightweight — JVM can create millions of them.
+  # Replaces the default platform thread pool for Tomcat request handling.
+  # Each incoming HTTP request gets its own virtual thread instead of a
+  # borrowed thread from a fixed pool. Great for I/O-bound microservices.
+  threads:
+    virtual:
+      enabled: true
+
+  # ─── Database ───────────────────────────────────────────────
+  datasource:
+    url: jdbc:mysql://localhost:3306/show_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root         # Change to your MySQL username if different
+    password: root         # Change to your MySQL password if different
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: ShowServiceHikariPool
+      # Maximum DB connections in the pool.
+      # With virtual threads, you can have many concurrent requests,
+      # but DB connections are still limited (MySQL default max is 151).
+      # 10 is safe for dev; tune for production based on load testing.
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  # ─── JPA / Hibernate ────────────────────────────────────────
+  jpa:
+    hibernate:
+      # ddl-auto: update — Hibernate creates/alters tables to match entities on startup.
+      # NEVER use 'create' or 'create-drop' in production (destroys data!).
+      # Use 'validate' in production with Flyway/Liquibase for controlled migrations.
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+        jdbc:
+          # Batch inserts: when saveAll() is called with 150 ShowSeats,
+          # Hibernate groups them into batches of 50 → 3 DB round trips instead of 150.
+          # CRITICAL for show creation performance.
+          batch_size: 50
+        order_inserts: true   # Reorders inserts to maximize batch efficiency
+    # open-in-view: false prevents lazy loading outside of @Transactional.
+    # Without this, Spring opens a DB session per HTTP request (even for non-DB ops).
+    # This causes subtle N+1 issues. Always disable for production-quality code.
+    open-in-view: false
+
+# ─── Eureka Client ──────────────────────────────────────────
+# Registers this service with the Discovery Server so the API Gateway
+# can route lb://show-service → actual IP:port of this instance.
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka:eureka-password@localhost:8761/eureka/
+    # Poll registry every 5s (dev setting — default is 30s).
+    # Faster dev iteration: if show-service restarts, gateway finds it quickly.
+    registry-fetch-interval-seconds: 5
+  instance:
+    # Register with IP (not hostname) — prevents DNS resolution issues on Windows/Docker.
+    prefer-ip-address: true
+    # Heartbeat every 10s (default: 30s) — faster failure detection in dev.
+    lease-renewal-interval-in-seconds: 10
+    # Evict from Eureka if no heartbeat for 30s (default: 90s).
+    lease-expiration-duration-in-seconds: 30
+
+# ─── Actuator ───────────────────────────────────────────────
+# Exposes /actuator/health — used by Eureka to verify the service is healthy.
+# Without a health endpoint, Eureka marks the instance as DOWN.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+
+# ─── Logging ────────────────────────────────────────────────
+logging:
+  level:
+    com.moviebooking: DEBUG
+    org.hibernate.SQL: DEBUG   # Logs every SQL query — disable in production

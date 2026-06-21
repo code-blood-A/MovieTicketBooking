@@ -1,0 +1,74 @@
+# ═══════════════════════════════════════════════════════════
+# Payment Service Configuration
+# Port: 8086 | Database: payment_db
+# ═══════════════════════════════════════════════════════════
+
+server:
+  port: 8086
+
+spring:
+  application:
+    name: payment-service   # Eureka key — must be unique across all services
+
+  # Java 21 Virtual Threads — I/O-heavy service (DB + Feign calls)
+  threads:
+    virtual:
+      enabled: true
+
+  # ─── Database ───────────────────────────────────────────────
+  datasource:
+    url: jdbc:mysql://localhost:3306/payment_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: PaymentServiceHikariPool
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  # ─── JPA / Hibernate ────────────────────────────────────────
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+    open-in-view: false
+
+# ─── Eureka Client ──────────────────────────────────────────
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka:eureka-password@localhost:8761/eureka/
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+# ─── Actuator ───────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+
+# ─── Feign Configuration ────────────────────────────────────
+# Payment→Booking calls should be fast — booking confirm/cancel
+# is a simple DB + Show Service operation.
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 3000   # 3 seconds to connect to Booking Service
+        readTimeout: 8000      # 8 seconds: Booking confirms/cancels via Show Service Feign call
+        loggerLevel: BASIC
+
+# ─── Logging ────────────────────────────────────────────────
+logging:
+  level:
+    com.moviebooking: DEBUG
+    org.hibernate.SQL: DEBUG
+    feign: DEBUG

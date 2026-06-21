@@ -1,13 +1,118 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
+    <!--
+    =========================================================
+    SHOW SERVICE — POM
+    =========================================================
+    This service is the "glue" between Movie Service and Theatre Service.
+    It schedules movies to play in specific screens at specific times.
+
+    Key responsibilities:
+      1. Create/manage Show entities (movieId + screenId + dateTime + price)
+      2. Auto-generate ShowSeat records when a show is created
+         (one ShowSeat per physical seat in the screen)
+      3. Allow Booking Service to lock/book individual ShowSeats
+      4. Provide seat availability info (how many AVAILABLE seats remain)
+
+    WHY no foreign keys to Movie/Theatre?
+    → Microservice rule: services NEVER share databases.
+      We store movieId and screenId as plain Long values.
+      Show Service "trusts" the caller to pass valid IDs.
+      If those IDs become stale (movie deleted), that's a
+      business/reconciliation problem — not a DB constraint problem.
+    =========================================================
+    -->
+
     <parent>
         <groupId>com.moviebooking</groupId>
         <artifactId>movieticketbookingbackend</artifactId>
         <version>1.0.0</version>
     </parent>
+
     <artifactId>show-service</artifactId>
-    <name>show-service (stub — to be implemented)</name>
+    <name>Show Service</name>
+    <description>Schedules movies to screens. Manages ShowSeat availability.</description>
+
+    <dependencies>
+
+        <!--
+        Spring Web MVC: REST controllers, JSON serialization.
+        This is the BLOCKING stack (not reactive/WebFlux).
+        All non-Gateway services use this.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--
+        Spring Data JPA + Hibernate:
+        ORM layer — maps Java entities to MySQL tables.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!--
+        Spring Validation: @Valid, @NotNull, @Min, @Max etc.
+        Validates incoming request bodies before they hit business logic.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!--
+        Spring Security:
+        We use permit-all here — the API Gateway is the trust boundary.
+        But we include it so SecurityConfig can inject X-User-Role header logic.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!--
+        Eureka Client: Registers show-service with the Discovery Server
+        so the Gateway can do lb://show-service routing.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
+        <!-- MySQL Driver: Connects to show_db -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Actuator: /actuator/health endpoint (used by Eureka health checks) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>

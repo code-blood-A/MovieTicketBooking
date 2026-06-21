@@ -1,0 +1,93 @@
+# ═══════════════════════════════════════════════════════════
+# Booking Service Configuration
+# Port: 8085 | Database: booking_db
+# ═══════════════════════════════════════════════════════════
+
+server:
+  port: 8085
+
+spring:
+  application:
+    name: booking-service   # Eureka service registry key — must be unique
+
+  # Java 21 Virtual Threads (Project Loom)
+  # Booking Service is heavily I/O-bound:
+  #   - Receives HTTP from client
+  #   - Makes multiple Feign calls to Show Service (for each seat)
+  #   - Writes to booking_db
+  # Virtual threads let thousands of these concurrent booking flows
+  # run without exhausting a fixed-size platform thread pool.
+  threads:
+    virtual:
+      enabled: true
+
+  # ─── Database ───────────────────────────────────────────────
+  datasource:
+    url: jdbc:mysql://localhost:3306/booking_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root         # Change to your MySQL username
+    password: root         # Change to your MySQL password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: BookingServiceHikariPool
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  # ─── JPA / Hibernate ────────────────────────────────────────
+  jpa:
+    hibernate:
+      ddl-auto: update    # Creates/updates tables on startup (use validate in prod)
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+    open-in-view: false   # Prevents lazy-loading outside @Transactional
+
+# ─── Eureka Client ──────────────────────────────────────────
+# Booking Service registers with Eureka so the Gateway can route
+# /api/bookings/** → lb://booking-service → actual IP:port.
+# Feign uses Eureka to resolve lb://show-service → Show Service IP.
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka:eureka-password@localhost:8761/eureka/
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+# ─── Actuator ───────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+
+# ─── Feign Client Configuration ─────────────────────────────
+# feign.client.config.default — applies to ALL @FeignClient interfaces.
+#
+# connectTimeout: how long to wait for TCP connection to Show Service.
+# readTimeout: how long to wait for Show Service to respond.
+#
+# WHY these values?
+#   - 3s connect: if Show Service is down, fail fast (don't hold seats locked).
+#   - 5s read: seat locking should be near-instant (DB write in Show Service).
+#   If Show Service takes >5s, something is wrong — fail and release locks.
+#
+# loggerLevel: FULL logs request URL, headers, body, and response.
+# Use BASIC or NONE in production to avoid logging sensitive data.
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 3000    # 3 seconds
+        readTimeout: 5000       # 5 seconds
+        loggerLevel: BASIC      # logs method + URL + status + time
+
+# ─── Logging ────────────────────────────────────────────────
+logging:
+  level:
+    com.moviebooking: DEBUG
+    org.hibernate.SQL: DEBUG
+    feign: DEBUG    # Shows Feign HTTP calls (method, URL, status code, time)

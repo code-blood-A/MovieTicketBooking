@@ -1,13 +1,160 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
+    <!--
+    ═══════════════════════════════════════════════
+    BOOKING SERVICE POM
+    ═══════════════════════════════════════════════
+    Inherits from parent POM:
+     - Java 21, Spring Boot 3.3.0, Spring Cloud 2023.0.1
+     - Lombok, spring-boot-starter-test
+     - -parameters compiler flag (fixes @RequestParam/@PathVariable)
+    -->
     <parent>
         <groupId>com.moviebooking</groupId>
         <artifactId>movieticketbookingbackend</artifactId>
         <version>1.0.0</version>
     </parent>
+
     <artifactId>booking-service</artifactId>
-    <name>booking-service (stub — to be implemented)</name>
+    <version>1.0.0</version>
+    <name>Booking Service</name>
+    <description>
+        Booking Service — orchestrates seat reservation flow.
+        Calls Show Service via OpenFeign to lock/book/release seats.
+        Port: 8085 | DB: booking_db
+    </description>
+
+    <dependencies>
+
+        <!-- ── WEB ─────────────────────────────────────────────── -->
+        <!--
+        spring-boot-starter-web:
+        Brings in Tomcat + Spring MVC + Jackson (JSON serialization).
+        Jackson handles LocalDate, BigDecimal, enums automatically.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- ── DATABASE ──────────────────────────────────────────── -->
+        <!--
+        spring-boot-starter-data-jpa:
+        Hibernate ORM + Spring Data JPA repositories.
+        JpaRepository<Entity, ID> gives us save/findById/findAll etc. for free.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!--
+        mysql-connector-j:
+        JDBC driver that lets Hibernate communicate with MySQL.
+        scope=runtime: only needed when the app is running, not at compile time.
+        -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ── VALIDATION ────────────────────────────────────────── -->
+        <!--
+        spring-boot-starter-validation:
+        Enables @NotNull, @Valid, @Min, @Max etc. on DTOs.
+        Without this, @Valid on @RequestBody does nothing.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- ── SECURITY ──────────────────────────────────────────── -->
+        <!--
+        spring-boot-starter-security:
+        Required to create a SecurityFilterChain bean (permit-all).
+        The API Gateway is the real security layer; this service just
+        disables Spring Security's default 401 behavior.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- ── SERVICE DISCOVERY ─────────────────────────────────── -->
+        <!--
+        spring-cloud-starter-netflix-eureka-client:
+        Registers this service with Discovery Server (port 8761).
+        Allows lb://show-service URLs to resolve to actual IP:port.
+        OpenFeign uses Eureka under the hood for load balancing.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
+        <!-- ── FEIGN CLIENT ───────────────────────────────────────── -->
+        <!--
+        spring-cloud-starter-openfeign:
+        Declarative HTTP client — you write an interface annotated with
+        @FeignClient and Spring generates the HTTP implementation.
+
+        WHY Feign over RestTemplate?
+        - Interface-based: cleaner, DRY, easier to test with mocks.
+        - Integrates with Eureka: lb://show-service works automatically.
+        - Error decoder: custom exception mapping in one place.
+        - Part of Spring Cloud ecosystem — same versions, same config.
+
+        Requires @EnableFeignClients in the main application class.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
+        <!-- ── ACTUATOR ──────────────────────────────────────────── -->
+        <!--
+        spring-boot-starter-actuator:
+        Exposes /actuator/health — Eureka uses this to verify the
+        service is healthy and should receive traffic.
+        Without health endpoint, Eureka marks instance as DOWN.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+            spring-boot-maven-plugin:
+            Repackages into a runnable fat JAR (includes all dependencies).
+            `java -jar booking-service-1.0.0.jar` works because of this.
+            -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>
