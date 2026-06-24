@@ -100,6 +100,19 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!--
+        OpenFeign — declarative HTTP client for service-to-service calls.
+        Show Service uses this to:
+          1. Validate movieId → GET lb://movie-service/api/movies/{id}
+          2. Validate screenId + fetch seat layout → GET lb://theatre-service/api/theatres/screens/{id}
+        Both calls run in PARALLEL via CompletableFuture.allOf() in createShow().
+        Requires @EnableFeignClients on ShowServiceApplication.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>

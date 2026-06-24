@@ -36,6 +36,20 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(409, ex.getMessage(), LocalDateTime.now()));
     }
 
+    /**
+     * IllegalArgumentException → 400 Bad Request.
+     * Covers these cases in initiatePayment():
+     *   - bookingId not found in Booking Service (FeignException.NotFound → re-thrown as this)
+     *   - bookingId belongs to another user (FeignException.Forbidden → re-thrown as this)
+     *   - payment amount doesn't match booking's totalAmount
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("Invalid payment request: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(400, ex.getMessage(), LocalDateTime.now()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()

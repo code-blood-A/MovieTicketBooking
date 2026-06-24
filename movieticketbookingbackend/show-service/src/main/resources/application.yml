@@ -89,3 +89,18 @@ logging:
   level:
     com.moviebooking: DEBUG
     org.hibernate.SQL: DEBUG   # Logs every SQL query — disable in production
+    feign: DEBUG               # Logs Feign HTTP calls (URL, status, time)
+
+# ─── Feign Client Configuration ─────────────────────────────
+# Show Service calls Movie Service and Theatre Service in createShow().
+# connectTimeout: fail fast if the service isn't reachable (don't hang).
+# readTimeout: how long to wait for the response (seat layout fetch is fast).
+# Both timeouts protect the show creation endpoint from cascading slowness
+# when Movie Service or Theatre Service is degraded.
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 3000   # 3 seconds to establish TCP connection
+        readTimeout: 5000      # 5 seconds to receive the response
+        loggerLevel: BASIC     # Logs method + URL + status + time

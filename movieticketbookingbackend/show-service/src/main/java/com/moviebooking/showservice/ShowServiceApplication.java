@@ -2,6 +2,7 @@ package com.moviebooking.showservice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
 
 /**
  * ShowServiceApplication — Entry point for Show Service.
@@ -34,6 +35,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  *                               └──────────────┘
  */
 @SpringBootApplication
+@EnableFeignClients  // Activates MovieServiceClient + TheatreServiceClient Feign proxies
 public class ShowServiceApplication {
     public static void main(String[] args) {
         SpringApplication.run(ShowServiceApplication.class, args);

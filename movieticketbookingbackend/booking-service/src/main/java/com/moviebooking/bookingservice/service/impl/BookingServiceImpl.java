@@ -129,8 +129,22 @@ public class BookingServiceImpl implements BookingService {
                         "Seat is not available. Please select a different seat. " +
                         "Already released " + lockedSeats.size() + " previously selected seat(s).");
 
+            } catch (FeignException.NotFound ex) {
+                // 404 from Show Service = showId or seatId doesn't exist.
+                // This is a client error (bad input), not a network/infra error.
+                // No compensation needed — no seats were successfully locked before this
+                // (if seats WERE locked before a bad seatId, release them first).
+                log.warn("Show or Seat not found: showId={}, seatId={}. Rolling back {} locks.",
+                        request.getShowId(), seatId, lockedSeats.size());
+
+                releaseLockedSeats(request.getShowId(), lockedSeats, userId);
+
+                throw new IllegalArgumentException(
+                        "Show ID " + request.getShowId() + " or Seat ID " + seatId +
+                        " does not exist. Please verify your show and seat selection.");
+
             } catch (FeignException ex) {
-                // Other Feign errors (Show Service down, network issue)
+                // Other Feign errors (Show Service down, network timeout, 5xx)
                 log.error("Feign error locking seat {}: {} {}", seatId, ex.status(), ex.getMessage());
 
                 // Release already-locked seats before propagating error

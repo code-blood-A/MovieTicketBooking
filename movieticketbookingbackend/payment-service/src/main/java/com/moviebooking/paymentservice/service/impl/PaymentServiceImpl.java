@@ -1,6 +1,7 @@
 package com.moviebooking.paymentservice.service.impl;
 
 import com.moviebooking.paymentservice.client.BookingServiceClient;
+import com.moviebooking.paymentservice.client.dto.BookingValidationResponse;
 import com.moviebooking.paymentservice.dto.*;
 import com.moviebooking.paymentservice.entity.Payment;
 import com.moviebooking.paymentservice.entity.enums.PaymentStatus;
@@ -77,13 +78,62 @@ public class PaymentServiceImpl {
         log.info("Initiating payment: bookingId={}, amount={}, method={}, userId={}",
                 request.getBookingId(), request.getAmount(), request.getPaymentMethod(), userId);
 
-        // Idempotency check: don't create a second payment for same booking
+        // ── Step 1: Validate booking exists in Booking Service ────────────
+        // Payment Service must NOT trust blind bookingId values from client.
+        // We call Booking Service via Feign to verify:
+        //   a) Booking exists (not a made-up ID)
+        //   b) Booking is PENDING (not already CONFIRMED or CANCELLED)
+        //   c) Booking belongs to this user (prevent paying for someone else's booking)
+        //   d) Amount matches the booking's totalAmount (prevent underpaying)
+        BookingValidationResponse booking;
+        try {
+            booking = bookingServiceClient.getBooking(request.getBookingId(), userId, null);
+        } catch (FeignException.NotFound ex) {
+            // Booking Service returned 404 — bookingId simply doesn't exist
+            throw new IllegalArgumentException(
+                    "Booking ID " + request.getBookingId() + " does not exist. " +
+                    "Please create a booking first before initiating payment.");
+        } catch (FeignException.Forbidden ex) {
+            // Booking Service returned 403 — booking exists but belongs to another user
+            throw new IllegalArgumentException(
+                    "Booking ID " + request.getBookingId() + " does not belong to you. " +
+                    "You can only pay for your own bookings.");
+        } catch (FeignException ex) {
+            // Booking Service is down or returned unexpected error
+            log.error("Could not reach Booking Service to validate bookingId={}: {}",
+                    request.getBookingId(), ex.getMessage());
+            throw new RuntimeException(
+                    "Booking Service is currently unavailable. Please try again shortly.");
+        }
+
+        // ── Step 2: Business rule — booking must be PENDING ──────────────
+        // Prevent paying for a booking that is already CONFIRMED (double charge)
+        // or CANCELLED (seats released, can't pay for cancelled booking).
+        if (!"PENDING".equals(booking.getStatus())) {
+            throw new IllegalStateException(
+                    "Cannot initiate payment for booking ID " + request.getBookingId() +
+                    ". Booking status is '" + booking.getStatus() + "' but must be PENDING.");
+        }
+
+        // ── Step 3: Amount sanity check ─────────────────────────────────
+        // Prevent "pay ₹1 for a ₹500 booking" client manipulation.
+        // The real amount must come from the booking, not the client's request.
+        if (booking.getTotalAmount() != null &&
+                request.getAmount().compareTo(booking.getTotalAmount()) != 0) {
+            throw new IllegalArgumentException(
+                    "Payment amount " + request.getAmount() +
+                    " does not match booking total " + booking.getTotalAmount() +
+                    ". Please use the exact booking amount.");
+        }
+
+        // ── Step 4: Idempotency — don't create duplicate payment ─────────
         if (paymentRepository.findByBookingId(request.getBookingId()).isPresent()) {
             throw new IllegalStateException(
                     "A payment already exists for booking ID: " + request.getBookingId() +
                     ". Cannot initiate duplicate payment.");
         }
 
+        // ── Step 5: Create PENDING payment record ───────────────────────
         Payment payment = Payment.builder()
                 .bookingId(request.getBookingId())
                 .userId(userId)

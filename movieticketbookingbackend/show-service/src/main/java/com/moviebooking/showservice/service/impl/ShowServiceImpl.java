@@ -1,5 +1,9 @@
 package com.moviebooking.showservice.service.impl;
 
+import com.moviebooking.showservice.client.MovieServiceClient;
+import com.moviebooking.showservice.client.TheatreServiceClient;
+import com.moviebooking.showservice.client.dto.MovieValidationResponse;
+import com.moviebooking.showservice.client.dto.ScreenValidationResponse;
 import com.moviebooking.showservice.dto.*;
 import com.moviebooking.showservice.entity.Show;
 import com.moviebooking.showservice.entity.ShowSeat;
@@ -10,6 +14,7 @@ import com.moviebooking.showservice.exception.ShowSeatNotFoundException;
 import com.moviebooking.showservice.repository.ShowRepository;
 import com.moviebooking.showservice.repository.ShowSeatRepository;
 import com.moviebooking.showservice.service.ShowService;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +26,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -45,6 +51,8 @@ public class ShowServiceImpl implements ShowService {
 
     private final ShowRepository showRepository;
     private final ShowSeatRepository showSeatRepository;
+    private final MovieServiceClient movieServiceClient;
+    private final TheatreServiceClient theatreServiceClient;
 
     /**
      * Seat type price multipliers.
@@ -86,34 +94,84 @@ public class ShowServiceImpl implements ShowService {
     @Override
     @Transactional
     public ShowResponse createShow(ShowRequest request) {
-        System.out.println("aakash");
         log.info("Creating show: movieId={}, screenId={}, date={}, time={}",
                 request.getMovieId(), request.getScreenId(),
                 request.getShowDate(), request.getShowTime());
 
-        int totalSeats = request.getTotalRows() * request.getSeatsPerRow();
+        // ── Step 1: Parallel Feign validation ────────────────────────────
+        // Movie and Screen validation are INDEPENDENT — run them simultaneously.
+        // CompletableFuture.allOf() starts both and waits for BOTH to complete.
+        // Total time = max(movieCallTime, screenCallTime) instead of their sum.
+        // e.g., 50ms + 50ms sequential → 50ms parallel (2× faster)
+        CompletableFuture<MovieValidationResponse> movieFuture = CompletableFuture
+                .supplyAsync(() -> {
+                    try {
+                        return movieServiceClient.getMovie(request.getMovieId());
+                    } catch (FeignException.NotFound ex) {
+                        throw new IllegalArgumentException(
+                                "Movie with ID " + request.getMovieId() + " does not exist in Movie Service.");
+                    } catch (FeignException ex) {
+                        throw new RuntimeException(
+                                "Movie Service is unavailable. Cannot validate movieId. Please try again.");
+                    }
+                });
 
-        // Step 1: Build and save the Show entity
+        CompletableFuture<ScreenValidationResponse> screenFuture = CompletableFuture
+                .supplyAsync(() -> {
+                    try {
+                        return theatreServiceClient.getScreen(request.getScreenId());
+                    } catch (FeignException.NotFound ex) {
+                        throw new IllegalArgumentException(
+                                "Screen with ID " + request.getScreenId() + " does not exist in Theatre Service.");
+                    } catch (FeignException ex) {
+                        throw new RuntimeException(
+                                "Theatre Service is unavailable. Cannot validate screenId. Please try again.");
+                    }
+                });
+
+        // Wait for BOTH calls to finish (or either to fail)
+        try {
+            CompletableFuture.allOf(movieFuture, screenFuture).join();
+        } catch (Exception ex) {
+            // Unwrap the real exception from CompletableFuture wrapper
+            Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+            if (cause instanceof IllegalArgumentException iae) throw iae;
+            throw new RuntimeException(cause.getMessage());
+        }
+
+        MovieValidationResponse movie = movieFuture.join();
+        ScreenValidationResponse screen = screenFuture.join();
+
+        log.info("Validated: movie='{}' ({}min), screen='{}' ({}×{}={}seats)",
+                movie.getTitle(), movie.getDurationMinutes(),
+                screen.getName(), screen.getTotalRows(), screen.getSeatsPerRow(), screen.getTotalSeats());
+
+        // ── Step 2: Build and save the Show entity ───────────────────────
+        // durationMinutes and totalSeats come from the services — authoritative!
+        int totalSeats = screen.getTotalSeats();
+
         Show show = Show.builder()
-                .movieId(request.getMovieId())
-                .screenId(request.getScreenId())
+                .movieId(movie.getId())
+                .screenId(screen.getId())
                 .showDate(request.getShowDate())
                 .showTime(request.getShowTime())
                 .basePrice(request.getBasePrice())
-                .durationMinutes(request.getDurationMinutes())
+                .durationMinutes(movie.getDurationMinutes())  // from Movie Service — authoritative
                 .language(request.getLanguage())
                 .status(ShowStatus.SCHEDULED)
-                .totalSeats(totalSeats)
-                .availableSeats(totalSeats) // all seats available initially
+                .totalSeats(totalSeats)                       // from Theatre Service — authoritative
+                .availableSeats(totalSeats)
                 .build();
 
         show = showRepository.save(show);
         log.debug("Saved show with ID={}", show.getId());
 
-        // Step 2: Generate all ShowSeat records
-        List<ShowSeat> showSeats = generateShowSeats(show, request);
+        // ── Step 3: Generate ShowSeat records using real screen dimensions ─
+        // totalRows and seatsPerRow come from Theatre Service — no admin entry!
+        List<ShowSeat> showSeats = generateShowSeats(show, request,
+                screen.getTotalRows(), screen.getSeatsPerRow());
 
-        // Step 3: Batch save all seats (leverages hibernate.jdbc.batch_size=50)
+        // ── Step 4: Batch save all seats ─────────────────────────────────
         showSeatRepository.saveAll(showSeats);
         log.info("Generated {} ShowSeat records for showId={}", showSeats.size(), show.getId());
 
@@ -130,8 +188,8 @@ public class ShowServiceImpl implements ShowService {
      * → O(1) lookup. If admin provides 3 premium rows, Set.contains() is faster
      * than List.contains() for frequent lookups inside nested loops.
      */
-    private List<ShowSeat> generateShowSeats(Show show, ShowRequest request) {
-        // Convert to uppercase sets for case-insensitive matching
+    private List<ShowSeat> generateShowSeats(Show show, ShowRequest request,
+                                              int totalRows, int seatsPerRow) {
         Set<String> premiumRowSet = request.getPremiumRows() == null
                 ? Set.of()
                 : request.getPremiumRows().stream()
@@ -144,13 +202,11 @@ public class ShowServiceImpl implements ShowService {
                         .map(String::toUpperCase)
                         .collect(Collectors.toSet());
 
-        List<ShowSeat> seats = new ArrayList<>(request.getTotalRows() * request.getSeatsPerRow());
+        List<ShowSeat> seats = new ArrayList<>(totalRows * seatsPerRow);
 
-        for (int rowIndex = 0; rowIndex < request.getTotalRows(); rowIndex++) {
-            // Convert row index to letter: 0→A, 1→B, ..., 9→J, ..., 25→Z
+        for (int rowIndex = 0; rowIndex < totalRows; rowIndex++) {
             String rowLabel = String.valueOf((char) ('A' + rowIndex));
 
-            // Determine seat type for this entire row
             String seatType;
             BigDecimal price;
 
@@ -165,13 +221,12 @@ public class ShowServiceImpl implements ShowService {
                 price = request.getBasePrice();
             }
 
-            // Create one ShowSeat per seat in this row
-            for (int seatNum = 1; seatNum <= request.getSeatsPerRow(); seatNum++) {
-                String seatLabel = rowLabel + seatNum; // e.g., "A1", "J15"
+            for (int seatNum = 1; seatNum <= seatsPerRow; seatNum++) {
+                String seatLabel = rowLabel + seatNum;
 
                 ShowSeat showSeat = ShowSeat.builder()
                         .show(show)
-                        .seatId(null) // No direct FK to Theatre's seat — MVP simplification
+                        .seatId(null)
                         .seatLabel(seatLabel)
                         .seatType(seatType)
                         .price(price)

@@ -57,6 +57,24 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * IllegalArgumentException → 400 Bad Request.
+     * Used when the client sends an invalid showId or seatId that doesn't exist
+     * in Show Service (Show Service returns 404, we catch FeignException.NotFound
+     * and re-throw as IllegalArgumentException with a clear message).
+     *
+     * WHY 400 and not 404?
+     * The Booking resource itself wasn't found (that would be 404).
+     * The REQUEST itself is invalid — the client sent a bad showId/seatId.
+     * 400 = "Your request has an error". 404 = "The resource you asked for doesn't exist".
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("Invalid argument: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(400, ex.getMessage(), LocalDateTime.now()));
+    }
+
+    /**
      * @Valid validation failures → 400 Bad Request.
      * Collects ALL field errors into one response.
      */

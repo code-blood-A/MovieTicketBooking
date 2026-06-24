@@ -1,6 +1,8 @@
 package com.moviebooking.paymentservice.client;
 
+import com.moviebooking.paymentservice.client.dto.BookingValidationResponse;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -31,6 +33,28 @@ import org.springframework.web.bind.annotation.RequestHeader;
  */
 @FeignClient(name = "booking-service")
 public interface BookingServiceClient {
+
+    /**
+     * Fetch a booking to validate it exists, is PENDING, and belongs to this user.
+     * Maps to: GET /api/bookings/{id} in BookingController.
+     *
+     * Called in initiatePayment() BEFORE creating a Payment record.
+     * Prevents payments for:
+     *   - Non-existent bookings (bookingId doesn't exist → 404 → clear error)
+     *   - Already-confirmed bookings (status=CONFIRMED → reject with message)
+     *   - Already-cancelled bookings (status=CANCELLED → reject with message)
+     *   - Bookings belonging to another user (userId mismatch → 403)
+     *
+     * @param bookingId The booking to validate
+     * @param userId    Forwarded so Booking Service can enforce ownership check
+     * @param userRole  Forwarded so Booking Service allows admin access too
+     */
+    @GetMapping("/api/bookings/{id}")
+    BookingValidationResponse getBooking(
+            @PathVariable("id") Long bookingId,
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader(value = "X-User-Role", required = false) String userRole
+    );
 
     /**
      * Confirm a booking after successful payment.
